@@ -222,18 +222,28 @@ export const AppShell: React.FC = () => {
       </header>
 
       <div className="relative flex-1 overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute inset-0"
-          >
-            {panels[tab]}
-          </motion.div>
-        </AnimatePresence>
+        {Object.entries(panels).map(([panelTab, panel]) => {
+          const isActive = panelTab === tab;
+          return (
+            <motion.div
+              key={panelTab}
+              initial={false}
+              animate={{
+                opacity: isActive ? 1 : 0,
+                y: isActive ? 0 : 8,
+              }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute inset-0"
+              style={{
+                pointerEvents: isActive ? 'auto' : 'none',
+                visibility: isActive ? 'visible' : 'hidden',
+              }}
+              aria-hidden={!isActive}
+            >
+              {panel}
+            </motion.div>
+          );
+        })}
       </div>
 
       <div className="z-20 flex flex-shrink-0 justify-center pb-6 pt-3">
