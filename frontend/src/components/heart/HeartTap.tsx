@@ -19,10 +19,12 @@ const playPerfectMatchSound = () => {
   if (typeof window === 'undefined') return;
 
   try {
-    const AudioContext = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContext) return;
+    const AudioContextCtor =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof globalThis.AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return;
 
-    const ctx = new AudioContext();
+    const ctx = new AudioContextCtor();
     const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51];
 
     notes.forEach((freq, idx) => {
