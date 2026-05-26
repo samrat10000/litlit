@@ -2,20 +2,22 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Pencil, LogOut, Unlink, Music } from 'lucide-react';
+import { Heart, MessageCircle, Pencil, LogOut, Unlink, Music, Video } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { HeartTap } from '../heart/HeartTap';
 import { Chat } from '../chat/Chat';
 import { Doodle } from '../doodle/Doodle';
 import { Songs } from '../songs/Songs';
+import { VideoRoom } from '../video/VideoRoom';
 
-type Tab = 'heart' | 'doodle' | 'chat' | 'songs';
+type Tab = 'heart' | 'doodle' | 'chat' | 'songs' | 'video';
 
 const TABS: { id: Tab; icon: React.ReactNode; label: string }[] = [
   { id: 'heart', icon: <Heart className="h-5 w-5" />, label: 'Heart' },
   { id: 'doodle', icon: <Pencil className="h-5 w-5" />, label: 'Doodle' },
   { id: 'chat', icon: <MessageCircle className="h-5 w-5" />, label: 'Chat' },
   { id: 'songs', icon: <Music className="h-5 w-5" />, label: 'Songs' },
+  { id: 'video', icon: <Video className="h-5 w-5" />, label: 'Video' },
 ];
 
 export const AppShell: React.FC = () => {
@@ -83,6 +85,7 @@ export const AppShell: React.FC = () => {
     chat: <Chat />,
     doodle: <Doodle />,
     songs: <Songs />,
+    video: <VideoRoom />,
   };
 
   return (

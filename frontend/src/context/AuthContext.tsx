@@ -73,6 +73,14 @@ export interface MusicStateData {
   _ts?: number;
 }
 
+export interface VideoStateData {
+  action: 'load' | 'play' | 'pause' | 'seek';
+  videoId: string;
+  currentTime: number;
+  isPlaying?: boolean;
+  _ts?: number;
+}
+
 interface AuthResponse {
   token: string;
   user: User;
@@ -103,6 +111,7 @@ interface AuthContextType {
   lastDoodleStroke: DoodleStrokeData | null;
   doodleClearSignal: number;
   lastReceivedMusicState: MusicStateData | null;
+  lastReceivedVideoState: VideoStateData | null;
   perfectMatchSignal: number;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName: string) => Promise<void>;
@@ -115,6 +124,7 @@ interface AuthContextType {
   sendDoodleStroke: (data: DoodleStrokeData) => void;
   sendDoodleClear: () => void;
   sendMusicState: (data: MusicStateData) => void;
+  sendVideoState: (data: VideoStateData) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -134,6 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastDoodleStroke, setLastDoodleStroke] = useState<DoodleStrokeData | null>(null);
   const [doodleClearSignal, setDoodleClearSignal] = useState(0);
   const [lastReceivedMusicState, setLastReceivedMusicState] = useState<MusicStateData | null>(null);
+  const [lastReceivedVideoState, setLastReceivedVideoState] = useState<VideoStateData | null>(null);
   const [perfectMatchSignal, setPerfectMatchSignal] = useState(0);
   const socketRef = useRef<Socket | null>(null);
 
@@ -215,6 +226,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     socket.on('receive-music-state', (data: MusicStateData) => {
       setLastReceivedMusicState({ ...data, _ts: Date.now() });
+    });
+
+    socket.on('receive-video-state', (data: VideoStateData) => {
+      setLastReceivedVideoState({ ...data, _ts: Date.now() });
     });
 
     return () => {
@@ -369,6 +384,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socketRef.current?.emit('music-state', data);
   }, []);
 
+  const sendVideoState = useCallback((data: VideoStateData) => {
+    socketRef.current?.emit('video-state', data);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -382,6 +401,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastDoodleStroke,
         doodleClearSignal,
         lastReceivedMusicState,
+        lastReceivedVideoState,
         perfectMatchSignal,
         login,
         register,
@@ -394,6 +414,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendDoodleStroke,
         sendDoodleClear,
         sendMusicState,
+        sendVideoState,
       }}
     >
       {children}
