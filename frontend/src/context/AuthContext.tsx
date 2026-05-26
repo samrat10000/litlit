@@ -18,10 +18,25 @@ interface User {
   } | null;
 }
 
+export interface ChatMessage {
+  _id: string;
+  content: string;
+  sender: { _id: string; displayName: string };
+  createdAt: string;
+}
+
 interface HeartTapData {
   senderName: string;
   intensity: string;
   timestamp: number;
+}
+
+interface DoodleStrokeData {
+  type: 'begin' | 'move' | 'end';
+  x: number;
+  y: number;
+  color: string;
+  size: number;
 }
 
 interface AuthContextType {
@@ -31,6 +46,9 @@ interface AuthContextType {
   error: string | null;
   isConnected: boolean;
   lastReceivedTap: HeartTapData | null;
+  messages: ChatMessage[];
+  lastDoodleStroke: DoodleStrokeData | null;
+  doodleClearSignal: number;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName: string) => Promise<void>;
   connectPartner: (partnerCode: string) => Promise<void>;
@@ -38,6 +56,9 @@ interface AuthContextType {
   logout: () => void;
   clearError: () => void;
   sendHeartTap: (intensity?: 'normal' | 'soft' | 'strong') => boolean;
+  sendMessage: (content: string) => boolean;
+  sendDoodleStroke: (data: DoodleStrokeData) => void;
+  sendDoodleClear: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -47,20 +68,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Realtime States
   const [isConnected, setIsConnected] = useState(false);
   const [lastReceivedTap, setLastReceivedTap] = useState<HeartTapData | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [lastDoodleStroke, setLastDoodleStroke] = useState<DoodleStrokeData | null>(null);
+  const [doodleClearSignal, setDoodleClearSignal] = useState(0);
   const socketRef = useRef<Socket | null>(null);
 
-  // Initialize socket when token changes
+  // Fetch message history when user has a partner
+  const fetchMessages = useCallback(async (tok: string) => {
+    try {
+      const data = await apiRequest('/messages', { headers: { Authorization: `Bearer ${tok}` } });
+      setMessages(Array.isArray(data) ? data : []);
+    } catch { setMessages([]); }
+  }, []);
+
+  // Socket lifecycle
   useEffect(() => {
     if (!token) {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-        setIsConnected(false);
-      }
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      setIsConnected(false);
       return;
     }
 
@@ -70,161 +98,108 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     });
-
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-      console.log('Global socket connected');
-      setIsConnected(true);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Global socket disconnected');
-      setIsConnected(false);
-    });
+    socket.on('connect', () => setIsConnected(true));
+    socket.on('disconnect', () => setIsConnected(false));
+    socket.on('connect_error', () => setIsConnected(false));
 
     socket.on('partner-connected', (data: any) => {
-      console.log('Realtime event: partner-connected received!', data);
-      setUser((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          partnerId: data.partnerId,
-        };
-      });
+      setUser(prev => prev ? { ...prev, partnerId: data.partnerId } : null);
+      // Fetch messages once connected
+      if (token) fetchMessages(token);
     });
 
     socket.on('partner-disconnected', () => {
-      console.log('Realtime event: partner-disconnected received!');
-      setUser((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          partnerId: null,
-        };
-      });
+      setUser(prev => prev ? { ...prev, partnerId: null } : null);
+      setMessages([]);
     });
 
     socket.on('receive-heart', (data: any) => {
-      console.log('Realtime event: receive-heart received!', data);
-      setLastReceivedTap({
-        senderName: data.senderName,
-        intensity: data.intensity || 'normal',
-        timestamp: Date.now(),
+      setLastReceivedTap({ senderName: data.senderName, intensity: data.intensity || 'normal', timestamp: Date.now() });
+    });
+
+    socket.on('receive-message', (data: ChatMessage) => {
+      setMessages(prev => {
+        if (prev.some(m => m._id === data._id)) return prev;
+        return [...prev, data];
       });
     });
 
-    socket.on('connect_error', (err) => {
-      console.error('Global socket connection error:', err.message);
-      setIsConnected(false);
+    socket.on('receive-doodle-stroke', (data: DoodleStrokeData) => {
+      setLastDoodleStroke({ ...data, _ts: Date.now() } as any);
     });
 
-    return () => {
-      socket.disconnect();
-      socketRef.current = null;
-      setIsConnected(false);
-    };
-  }, [token]);
+    socket.on('receive-doodle-clear', () => {
+      setDoodleClearSignal(s => s + 1);
+    });
 
+    return () => { socket.disconnect(); socketRef.current = null; setIsConnected(false); };
+  }, [token, fetchMessages]);
+
+  // Init auth
   useEffect(() => {
-    const initializeAuth = async () => {
-      const storedToken = localStorage.getItem('token');
-      if (storedToken) {
+    const init = async () => {
+      const stored = localStorage.getItem('token');
+      if (stored) {
         try {
-          setToken(storedToken);
-          const userData = await apiRequest('/auth/me', {
-            headers: { Authorization: `Bearer ${storedToken}` }
-          });
+          setToken(stored);
+          const userData = await apiRequest('/auth/me', { headers: { Authorization: `Bearer ${stored}` } });
           setUser(userData);
-        } catch (err) {
-          console.error('Failed to restore auth session:', err);
+          if (userData?.partnerId) fetchMessages(stored);
+        } catch {
           localStorage.removeItem('token');
-          setToken(null);
-          setUser(null);
+          setToken(null); setUser(null);
         }
       }
       setLoading(false);
     };
-
-    initializeAuth();
-  }, []);
+    init();
+  }, [fetchMessages]);
 
   const login = async (username: string, password: string) => {
-    setError(null);
-    setLoading(true);
+    setError(null); setLoading(true);
     try {
-      const data = await apiRequest('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      });
+      const data = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
       localStorage.setItem('token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+      setToken(data.token); setUser(data.user);
+      if (data.user?.partnerId) fetchMessages(data.token);
+    } catch (err: any) { setError(err.message || 'Login failed'); throw err; }
+    finally { setLoading(false); }
   };
 
   const register = async (username: string, password: string, displayName: string) => {
-    setError(null);
-    setLoading(true);
+    setError(null); setLoading(true);
     try {
-      const data = await apiRequest('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ username, password, displayName }),
-      });
+      const data = await apiRequest('/auth/register', { method: 'POST', body: JSON.stringify({ username, password, displayName }) });
       localStorage.setItem('token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-    } catch (err: any) {
-      setError(err.message || 'Registration failed');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+      setToken(data.token); setUser(data.user);
+    } catch (err: any) { setError(err.message || 'Registration failed'); throw err; }
+    finally { setLoading(false); }
   };
 
   const connectPartner = async (partnerCode: string) => {
-    setError(null);
-    setLoading(true);
+    setError(null); setLoading(true);
     try {
-      const data = await apiRequest('/auth/connect', {
-        method: 'POST',
-        body: JSON.stringify({ partnerCode }),
-      });
+      const data = await apiRequest('/auth/connect', { method: 'POST', body: JSON.stringify({ partnerCode }) });
       setUser(data.user);
-    } catch (err: any) {
-      setError(err.message || 'Connection failed');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+      if (token) fetchMessages(token);
+    } catch (err: any) { setError(err.message || 'Connection failed'); throw err; }
+    finally { setLoading(false); }
   };
 
   const disconnectPartner = async () => {
-    setError(null);
-    setLoading(true);
+    setError(null); setLoading(true);
     try {
-      const data = await apiRequest('/auth/disconnect', {
-        method: 'POST',
-      });
-      setUser(data.user);
-    } catch (err: any) {
-      setError(err.message || 'Disconnection failed');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+      const data = await apiRequest('/auth/disconnect', { method: 'POST' });
+      setUser(data.user); setMessages([]);
+    } catch (err: any) { setError(err.message || 'Disconnection failed'); throw err; }
+    finally { setLoading(false); }
   };
 
   const logout = () => {
     localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
-    setError(null);
+    setToken(null); setUser(null); setError(null); setMessages([]);
   };
 
   const clearError = () => setError(null);
@@ -232,40 +207,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const sendHeartTap = useCallback((intensity: 'normal' | 'soft' | 'strong' = 'normal') => {
     if (socketRef.current && isConnected) {
       socketRef.current.emit('heart-tap', { intensity });
-      console.log(`Global socket sent heart-tap with intensity: ${intensity}`);
       return true;
     }
-    console.warn('Cannot send heart tap: socket not connected');
     return false;
   }, [isConnected]);
 
+  const sendMessage = useCallback((content: string) => {
+    if (socketRef.current && isConnected && content.trim()) {
+      socketRef.current.emit('send-message', { content });
+      return true;
+    }
+    return false;
+  }, [isConnected]);
+
+  const sendDoodleStroke = useCallback((data: DoodleStrokeData) => {
+    socketRef.current?.emit('doodle-stroke', data);
+  }, []);
+
+  const sendDoodleClear = useCallback(() => {
+    socketRef.current?.emit('doodle-clear');
+  }, []);
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        error,
-        isConnected,
-        lastReceivedTap,
-        login,
-        register,
-        connectPartner,
-        disconnectPartner,
-        logout,
-        clearError,
-        sendHeartTap,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user, token, loading, error, isConnected,
+      lastReceivedTap, messages, lastDoodleStroke, doodleClearSignal,
+      login, register, connectPartner, disconnectPartner, logout, clearError,
+      sendHeartTap, sendMessage, sendDoodleStroke, sendDoodleClear,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 };
