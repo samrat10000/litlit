@@ -174,7 +174,7 @@ export const HeartTap: React.FC = () => {
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-between h-full overflow-hidden select-none">
+    <div className="relative flex h-full flex-col items-center justify-between overflow-hidden select-none" style={{ color: 'var(--foreground)' }}>
       <AnimatePresence>
         {(isPartnerThinking || isGoldenMatch) && (
           <motion.div
@@ -191,7 +191,7 @@ export const HeartTap: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <div className="absolute top-6 left-0 right-0 z-20 flex flex-col items-center justify-center pointer-events-none gap-2 px-6">
+      <div className="absolute top-6 left-0 right-0 z-20 flex flex-col items-center justify-center gap-2 px-6 pointer-events-none">
         <AnimatePresence mode="wait">
           {isGoldenMatch ? (
             <motion.div
@@ -200,7 +200,13 @@ export const HeartTap: React.FC = () => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.8, y: -10 }}
               transition={{ type: 'spring', stiffness: 400, damping: 18 }}
-              className="bg-amber-400 text-amber-950 px-6 py-2.5 rounded-full border border-amber-300 shadow-[0_10px_30px_rgba(251,191,36,0.3)] flex items-center gap-2 font-bold text-sm tracking-wide uppercase select-none"
+              className="flex select-none items-center gap-2 rounded-full border px-6 py-2.5 text-sm font-bold uppercase tracking-wide"
+              style={{
+                background: 'color-mix(in srgb, var(--surface) 88%, #fff7d6)',
+                color: '#8a5a00',
+                borderColor: 'rgba(251, 191, 36, 0.35)',
+                boxShadow: '0 10px 30px rgba(251, 191, 36, 0.18)',
+              }}
             >
               <Sparkles className="h-4.5 w-4.5 fill-current animate-spin" />
               Perfect Match
@@ -212,11 +218,15 @@ export const HeartTap: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-              className={`rounded-full px-5 py-2 backdrop-blur-md shadow-sm border ${
-                activeMessage.sender === 'me'
-                  ? 'bg-zinc-50/90 text-zinc-600 border-zinc-200/40 dark:bg-zinc-950/80 dark:text-zinc-400 dark:border-zinc-800/40'
-                  : 'bg-rose-50/95 text-rose-600 border-rose-100/50 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30'
-              }`}
+              className="rounded-full border px-5 py-2 shadow-sm backdrop-blur-md"
+              style={{
+                background:
+                  activeMessage.sender === 'me'
+                    ? 'color-mix(in srgb, var(--surface) 88%, white)'
+                    : 'color-mix(in srgb, var(--surface) 84%, #fff0f4)',
+                color: activeMessage.sender === 'me' ? 'color-mix(in srgb, var(--foreground) 72%, transparent)' : '#e11d48',
+                borderColor: activeMessage.sender === 'me' ? 'var(--border)' : 'rgba(251, 113, 133, 0.18)',
+              }}
             >
               <p className="text-xs font-bold tracking-wide flex items-center gap-1.5 leading-none">
                 <Heart className={`h-3 w-3 fill-current ${activeMessage.sender === 'me' ? 'text-zinc-400' : 'text-rose-500 animate-pulse'}`} />
@@ -282,9 +292,9 @@ export const HeartTap: React.FC = () => {
         </div>
       </div>
 
-      <div className="pb-4 flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 pb-4">
         <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-400 animate-pulse'}`} />
-        <span className="text-[11px] text-zinc-400 dark:text-zinc-600">
+        <span className="text-[11px]" style={{ color: 'color-mix(in srgb, var(--foreground) 48%, transparent)' }}>
           {isConnected ? `linked with ${partnerName}` : 'reconnecting...'}
         </span>
       </div>

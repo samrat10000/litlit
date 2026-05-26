@@ -24,7 +24,10 @@ export const Chat: React.FC = () => {
   }, [input, sendMessage]);
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   const myId = user?.id;
@@ -36,25 +39,23 @@ export const Chat: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2" style={{ scrollbarWidth: 'thin' }}>
+    <div className="flex h-full flex-col" style={{ color: 'var(--foreground)' }}>
+      <div className="flex-1 space-y-2 overflow-y-auto px-4 py-4" style={{ scrollbarWidth: 'thin' }}>
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-3 select-none">
-            <motion.div
-              animate={{ scale: [1, 1.08, 1] }}
-              transition={{ repeat: Infinity, duration: 2.5 }}
-            >
-              <Heart className="h-10 w-10 fill-rose-400/40 text-rose-400/40" />
+          <div className="flex h-full flex-col items-center justify-center gap-3 select-none">
+            <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 3 }}>
+              <Heart className="h-10 w-10 fill-rose-400/35 text-rose-400/35" />
             </motion.div>
-            <p className="text-xs text-zinc-400 dark:text-zinc-600 text-center">
-              No messages yet.<br />Say something sweet 🌸
+            <p className="text-center text-xs" style={{ color: 'color-mix(in srgb, var(--foreground) 52%, transparent)' }}>
+              No messages yet.
+              <br />
+              Say something sweet.
             </p>
           </div>
         )}
 
         <AnimatePresence initial={false}>
-          {messages.map((msg) => {
+          {messages.map(msg => {
             const isMine = msg.sender._id === myId;
             return (
               <motion.div
@@ -64,17 +65,23 @@ export const Chat: React.FC = () => {
                 transition={{ type: 'spring', stiffness: 300, damping: 28 }}
                 className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`group max-w-[72%] ${isMine ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
+                <div className={`flex max-w-[72%] flex-col gap-0.5 ${isMine ? 'items-end' : 'items-start'}`}>
                   <div
-                    className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-sm
-                      ${isMine
-                        ? 'bg-rose-500 text-white rounded-br-md'
-                        : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 rounded-bl-md'
-                      }`}
+                    className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words shadow-sm ${
+                      isMine ? 'rounded-br-md bg-rose-500 text-white' : 'rounded-bl-md'
+                    }`}
+                    style={
+                      isMine
+                        ? undefined
+                        : {
+                            background: 'color-mix(in srgb, var(--surface) 88%, white)',
+                            color: 'var(--foreground)',
+                          }
+                    }
                   >
                     {msg.content}
                   </div>
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-600 px-1">
+                  <span className="px-1 text-[10px]" style={{ color: 'color-mix(in srgb, var(--foreground) 42%, transparent)' }}>
                     {formatTime(msg.createdAt)}
                   </span>
                 </div>
@@ -85,9 +92,14 @@ export const Chat: React.FC = () => {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
-      <div className="px-4 pb-4 pt-2 border-t border-zinc-100 dark:border-zinc-900">
-        <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 px-4 py-2 transition-all focus-within:border-rose-400 dark:focus-within:border-rose-500">
+      <div className="px-4 pb-4 pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+        <div
+          className="flex items-center gap-2 rounded-2xl border px-4 py-2 transition-all focus-within:border-rose-400"
+          style={{
+            background: 'color-mix(in srgb, var(--surface) 88%, white)',
+            borderColor: 'var(--border)',
+          }}
+        >
           <input
             ref={inputRef}
             type="text"
@@ -96,13 +108,14 @@ export const Chat: React.FC = () => {
             onKeyDown={handleKey}
             placeholder={isConnected ? `Message ${partnerName}…` : 'Connecting…'}
             disabled={!isConnected}
-            className="flex-1 bg-transparent text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 outline-none min-w-0"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+            style={{ color: 'var(--foreground)' }}
           />
           <motion.button
             whileTap={{ scale: 0.85 }}
             onClick={handleSend}
             disabled={!input.trim() || !isConnected}
-            className="h-8 w-8 flex items-center justify-center rounded-xl bg-rose-500 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-opacity flex-shrink-0"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-30"
           >
             <Send className="h-4 w-4" />
           </motion.button>

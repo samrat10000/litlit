@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Pencil, LogOut, Unlink, Music, Video } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { Heart, MessageCircle, Pencil, LogOut, Unlink, Music, Video, Palette } from 'lucide-react';
+import { useAuth, ThemeId } from '../../context/AuthContext';
 import { HeartTap } from '../heart/HeartTap';
 import { Chat } from '../chat/Chat';
 import { Doodle } from '../doodle/Doodle';
@@ -20,39 +20,43 @@ const TABS: { id: Tab; icon: React.ReactNode; label: string }[] = [
   { id: 'video', icon: <Video className="h-5 w-5" />, label: 'Video' },
 ];
 
+const COZY_THEMES: { id: ThemeId; label: string; accent: string }[] = [
+  { id: 'midnight', label: 'Midnight', accent: 'bg-slate-400' },
+  { id: 'rose', label: 'Rose', accent: 'bg-rose-400' },
+  { id: 'lavender', label: 'Lavender', accent: 'bg-violet-400' },
+  { id: 'mint', label: 'Mint', accent: 'bg-emerald-400' },
+  { id: 'peach', label: 'Peach', accent: 'bg-orange-300' },
+  { id: 'sand', label: 'Sand', accent: 'bg-amber-300' },
+  { id: 'sakura', label: 'Sakura', accent: 'bg-pink-300' },
+  { id: 'matcha', label: 'Matcha', accent: 'bg-green-400' },
+  { id: 'yuzu', label: 'Yuzu', accent: 'bg-yellow-300' },
+  { id: 'wabisabi', label: 'Wabi-sabi', accent: 'bg-stone-400' },
+  { id: 'indigo', label: 'Indigo', accent: 'bg-indigo-400' },
+  { id: 'umi', label: 'Umi', accent: 'bg-sky-400' },
+];
+
 export const AppShell: React.FC = () => {
-  const { user, isConnected, messages, logout, disconnectPartner } = useAuth();
+  const { user, isConnected, messages, logout, disconnectPartner, themeId, setThemeId } = useAuth();
   const [tab, setTab] = useState<Tab>('heart');
   const [showMenu, setShowMenu] = useState(false);
   const [unread, setUnread] = useState(0);
-  
-  // Real-time floating pop-up/toast state for messages
   const [activeToast, setActiveToast] = useState<{ sender: string; content: string } | null>(null);
-  
   const prevMessageCount = useRef(messages.length);
 
-  // Track unread messages and show cute floating pop-up if not on the chat tab
   useEffect(() => {
     if (messages.length > prevMessageCount.current) {
       const latestMessage = messages[messages.length - 1];
       if (latestMessage) {
         const isMine = latestMessage.sender._id === user?.id;
-        
-        // Only trigger toast and count if it is from the partner
-        if (!isMine) {
-          if (tab !== 'chat') {
-            setUnread(u => u + (messages.length - prevMessageCount.current));
-            
-            // Set active floating notification pop-up
-            setActiveToast({
-              sender: latestMessage.sender.displayName,
-              content: latestMessage.content
-            });
+        if (!isMine && tab !== 'chat') {
+          setUnread(u => u + (messages.length - prevMessageCount.current));
+          setActiveToast({
+            sender: latestMessage.sender.displayName,
+            content: latestMessage.content,
+          });
 
-            // Vibrate phone slightly to signal incoming text
-            if (typeof navigator !== 'undefined' && navigator.vibrate) {
-              navigator.vibrate([100, 50, 100]);
-            }
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate([100, 50, 100]);
           }
         }
       }
@@ -60,7 +64,6 @@ export const AppShell: React.FC = () => {
     prevMessageCount.current = messages.length;
   }, [messages, tab, user?.id]);
 
-  // Clear unread and toast when entering chat
   useEffect(() => {
     if (tab === 'chat') {
       setUnread(0);
@@ -68,17 +71,11 @@ export const AppShell: React.FC = () => {
     }
   }, [tab]);
 
-  // Auto-dismiss toast after 4 seconds
   useEffect(() => {
-    if (activeToast) {
-      const timer = setTimeout(() => {
-        setActiveToast(null);
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
+    if (!activeToast) return;
+    const timer = setTimeout(() => setActiveToast(null), 4000);
+    return () => clearTimeout(timer);
   }, [activeToast]);
-
-  const partnerName = user?.partnerId?.displayName ?? 'Partner';
 
   const panels: Record<Tab, React.ReactNode> = {
     heart: <HeartTap />,
@@ -89,9 +86,13 @@ export const AppShell: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-black text-zinc-900 dark:text-zinc-50 overflow-hidden font-sans transition-colors duration-300 select-none relative">
-      
-      {/* ── Floating Toast Pop-up Notification for Messages ── */}
+    <div
+      className="relative flex h-screen flex-col overflow-hidden select-none font-sans transition-colors duration-300"
+      style={{
+        background: 'var(--background)',
+        color: 'var(--foreground)',
+      }}
+    >
       <AnimatePresence>
         {activeToast && (
           <motion.div
@@ -103,76 +104,124 @@ export const AppShell: React.FC = () => {
               setTab('chat');
               setActiveToast(null);
             }}
-            className="absolute top-16 left-1/2 z-50 flex items-center gap-3 bg-white/95 dark:bg-zinc-950/95 border border-rose-100/60 dark:border-rose-900/40 shadow-[0_12px_36px_rgba(244,63,94,0.12)] dark:shadow-[0_12px_36px_rgba(0,0,0,0.5)] backdrop-blur-xl px-5 py-3 rounded-2xl cursor-pointer max-w-[90vw] w-80 sm:w-96 select-none"
+            className="absolute left-1/2 top-16 z-50 flex w-80 max-w-[90vw] cursor-pointer select-none items-center gap-3 rounded-2xl border px-5 py-3 shadow-[0_12px_36px_rgba(244,63,94,0.12)] backdrop-blur-xl sm:w-96"
+            style={{
+              background: 'var(--surface)',
+              borderColor: 'var(--border)',
+              color: 'var(--foreground)',
+            }}
           >
-            <div className="h-8 w-8 flex items-center justify-center rounded-full bg-rose-500/10 text-rose-500 flex-shrink-0">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-rose-500/10 text-rose-500">
               <Heart className="h-4 w-4 fill-current animate-pulse" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">New Message</p>
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 truncate mt-0.5">
-                <span className="text-zinc-500 dark:text-zinc-400 font-medium">{activeToast.sender}:</span> {activeToast.content}
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500">New Message</p>
+              <p className="mt-0.5 truncate text-sm font-semibold" style={{ color: 'var(--foreground)' }}>
+                <span className="font-medium" style={{ color: 'color-mix(in srgb, var(--foreground) 58%, transparent)' }}>{activeToast.sender}:</span> {activeToast.content}
               </p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Top header ── */}
-      <header className="flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-zinc-900 flex-shrink-0 z-20">
+      <header
+        className="flex flex-shrink-0 items-center justify-between border-b px-5 py-3 z-20"
+        style={{
+          borderColor: 'rgba(255,255,255,0.08)',
+          background: 'color-mix(in srgb, var(--background) 84%, transparent)',
+          backdropFilter: 'blur(14px)',
+        }}
+      >
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold tracking-tight">litit</span>
           <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-rose-400 animate-pulse'}`} />
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-zinc-400 dark:text-zinc-600 font-medium hidden sm:block">
-            with <span className="text-zinc-600 dark:text-zinc-400">{partnerName}</span>
-          </span>
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu(m => !m)}
+            className="rounded-xl p-2 transition-colors hover:bg-white/50"
+            style={{ color: 'color-mix(in srgb, var(--foreground) 58%, transparent)' }}
+          >
+            <span className="sr-only">Open settings</span>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <circle cx="12" cy="5" r="1.2" fill="currentColor" />
+              <circle cx="12" cy="12" r="1.2" fill="currentColor" />
+              <circle cx="12" cy="19" r="1.2" fill="currentColor" />
+            </svg>
+          </button>
 
-          <div className="relative">
-            <button
-              onClick={() => setShowMenu(m => !m)}
-              className="p-2 rounded-xl text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 dark:text-zinc-600 dark:hover:text-zinc-300 dark:hover:bg-zinc-900 transition-colors"
-            >
-              <span className="sr-only">Open settings</span>
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <circle cx="12" cy="5" r="1.2" fill="currentColor" />
-                <circle cx="12" cy="12" r="1.2" fill="currentColor" />
-                <circle cx="12" cy="19" r="1.2" fill="currentColor" />
-              </svg>
-            </button>
+          <AnimatePresence>
+            {showMenu && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92, y: 8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: 8 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-10 z-50 w-72 rounded-2xl border p-2 shadow-lg backdrop-blur-xl"
+                style={{
+                  background: 'var(--surface)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--foreground)',
+                }}
+              >
+                <div className="mb-2 flex items-center gap-2 px-2 pt-1">
+                  <Palette className="h-3.5 w-3.5" style={{ color: 'color-mix(in srgb, var(--foreground) 52%, transparent)' }} />
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.24em]" style={{ color: 'color-mix(in srgb, var(--foreground) 56%, transparent)' }}>Cozy themes</span>
+                </div>
 
-            <AnimatePresence>
-              {showMenu && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.92, y: 8 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.92, y: 8 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-10 w-44 rounded-2xl border border-zinc-100 dark:border-zinc-900 bg-white dark:bg-zinc-950 shadow-lg p-1.5 z-50"
+                <div className="grid grid-cols-3 gap-2 p-1">
+                  {COZY_THEMES.map(theme => (
+                    <button
+                      key={theme.id}
+                      onClick={() => {
+                        setThemeId(theme.id);
+                        setShowMenu(false);
+                      }}
+                      className={`flex items-center gap-3 rounded-2xl border px-3 py-2 text-left transition-colors ${
+                        themeId === theme.id
+                          ? 'bg-white/60'
+                          : 'bg-white/35 hover:bg-white/55'
+                      }`}
+                      style={{
+                        borderColor: 'var(--border)',
+                      }}
+                    >
+                      <span className={`h-3 w-3 rounded-full ${theme.accent}`} />
+                      <span className="text-sm font-medium" style={{ color: 'var(--foreground)' }}>{theme.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="my-2 border-t" style={{ borderColor: 'var(--border)' }} />
+
+                <button
+                  onClick={() => {
+                    disconnectPartner();
+                    setShowMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-rose-500/10"
+                  style={{ color: 'color-mix(in srgb, var(--foreground) 74%, transparent)' }}
                 >
-                  <button
-                    onClick={() => { disconnectPartner(); setShowMenu(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 rounded-xl text-sm text-zinc-500 hover:bg-rose-50 hover:text-rose-600 dark:text-zinc-400 dark:hover:bg-rose-950/20 dark:hover:text-rose-400 transition-colors"
-                  >
-                    <Unlink className="h-3.5 w-3.5" /> Disconnect
-                  </button>
-                  <button
-                    onClick={() => { logout(); setShowMenu(false); }}
-                    className="flex w-full items-center gap-2 px-3 py-2 rounded-xl text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200 transition-colors"
-                  >
-                    <LogOut className="h-3.5 w-3.5" /> Log out
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                  <Unlink className="h-3.5 w-3.5" /> Disconnect
+                </button>
+                <button
+                  onClick={() => {
+                    logout();
+                    setShowMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-white/50"
+                  style={{ color: 'color-mix(in srgb, var(--foreground) 74%, transparent)' }}
+                >
+                  <LogOut className="h-3.5 w-3.5" /> Log out
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </header>
 
-      {/* ── Panel content ── */}
-      <div className="flex-1 overflow-hidden relative">
+      <div className="relative flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
@@ -187,13 +236,16 @@ export const AppShell: React.FC = () => {
         </AnimatePresence>
       </div>
 
-      {/* ── macOS-style dock tab bar ── */}
-      <div className="flex-shrink-0 flex justify-center pb-6 pt-3 z-20">
+      <div className="z-20 flex flex-shrink-0 justify-center pb-6 pt-3">
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1, type: 'spring', stiffness: 260, damping: 22 }}
-          className="flex items-end gap-2 bg-white/85 dark:bg-zinc-950/85 backdrop-blur-xl border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl px-4 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+          className="flex items-end gap-2 rounded-2xl border px-4 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl"
+          style={{
+            background: 'var(--surface)',
+            borderColor: 'var(--border)',
+          }}
         >
           {TABS.map(t => {
             const isActive = tab === t.id;
@@ -228,7 +280,6 @@ const DockItem: React.FC<DockItemProps> = ({ icon, label, isActive, badge = 0, o
 
   return (
     <div className="relative flex flex-col items-center gap-1">
-      {/* Tooltip */}
       <AnimatePresence>
         {hovered && (
           <motion.span
@@ -236,7 +287,12 @@ const DockItem: React.FC<DockItemProps> = ({ icon, label, isActive, badge = 0, o
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.9 }}
             transition={{ duration: 0.1 }}
-            className="absolute -top-8 text-[11px] font-semibold bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 px-2 py-0.5 rounded-lg whitespace-nowrap pointer-events-none"
+            className="pointer-events-none absolute -top-8 whitespace-nowrap rounded-lg px-2 py-0.5 text-[11px] font-semibold"
+            style={{
+              background: 'var(--surface)',
+              color: 'var(--foreground)',
+              border: '1px solid var(--border)',
+            }}
           >
             {label}
           </motion.span>
@@ -250,27 +306,33 @@ const DockItem: React.FC<DockItemProps> = ({ icon, label, isActive, badge = 0, o
         whileHover={{ scale: 1.22, y: -4 }}
         whileTap={{ scale: 0.9 }}
         transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-        className={`relative h-12 w-12 flex items-center justify-center rounded-2xl transition-colors duration-200
-          ${isActive
+        className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-colors duration-200 ${
+          isActive
             ? 'bg-rose-500 text-white shadow-[0_4px_12px_rgba(244,63,94,0.35)]'
-            : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800'
-          }`}
+            : 'hover:bg-white/55'
+        }`}
+        style={
+          isActive
+            ? undefined
+            : {
+                background: 'color-mix(in srgb, var(--surface) 84%, transparent)',
+                color: 'color-mix(in srgb, var(--foreground) 76%, transparent)',
+              }
+        }
       >
         {icon}
 
-        {/* Notification badge */}
         {badge > 0 && (
           <motion.span
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 flex items-center justify-center bg-rose-500 text-white text-[9px] font-bold rounded-full"
+            className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white"
           >
             {badge > 9 ? '9+' : badge}
           </motion.span>
         )}
       </motion.button>
 
-      {/* Active dot */}
       {isActive && (
         <motion.span
           layoutId="dock-dot"

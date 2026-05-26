@@ -147,6 +147,17 @@ export const setupSocket = (io: Server) => {
       } catch {}
     });
 
+    socket.on('theme-state', async (data) => {
+      try {
+        const sender = await User.findById(userId);
+        if (!sender || !sender.partnerId) return;
+        io.to(sender.partnerId.toString()).emit('receive-theme-state', {
+          ...data,
+          timestamp: Date.now(),
+        });
+      } catch {}
+    });
+
     socket.on('disconnect', () => {
       console.log(`User disconnected: ${userId}`);
     });

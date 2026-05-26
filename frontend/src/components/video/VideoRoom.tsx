@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { motion } from 'framer-motion';
-import { Play, Pause, RotateCcw, Video } from 'lucide-react';
+import { Play, Pause, RotateCcw } from 'lucide-react';
 
 type YouTubePlayerState = -1 | 0 | 1 | 2 | 3 | 5;
 
@@ -339,56 +339,74 @@ export const VideoRoom: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col bg-[radial-gradient(circle_at_top,_rgba(255,0,0,0.18),_transparent_35%),radial-gradient(circle_at_bottom,_rgba(255,200,0,0.18),_transparent_40%),#050510] text-white">
-      <div className="flex items-center gap-3 border-b border-white/10 bg-black/40 px-4 py-3 backdrop-blur-md">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/15 text-red-400">
-          <Video className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">Shared YouTube room</p>
-          <p className="text-xs text-zinc-400">Paste a link, load it, and keep both screens in sync.</p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 border-b border-white/10 bg-black/25 px-4 py-3">
+    <div
+      className="flex h-full flex-col"
+      style={{
+        background:
+          'radial-gradient(circle_at_top,_color-mix(in_srgb,var(--accent)_18%,transparent),_transparent_40%),radial-gradient(circle_at_bottom,_rgba(255,255,255,0.65),_transparent_50%),var(--background)',
+        color: 'var(--foreground)',
+      }}
+    >
+      <div
+        className="flex items-center gap-2 border-b px-4 py-3 backdrop-blur-md"
+        style={{
+          borderColor: 'var(--border)',
+          background: 'color-mix(in srgb, var(--surface) 78%, transparent)',
+        }}
+      >
         <input
           value={urlInput}
           onChange={e => setUrlInput(e.target.value)}
-          placeholder="Paste a YouTube URL or video ID"
-          className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-red-400/60"
+          placeholder="Paste a link or video ID"
+          className="min-w-0 flex-1 rounded-2xl border px-4 py-3 text-sm outline-none placeholder:opacity-60 focus:border-rose-400/60"
+          style={{
+            borderColor: 'var(--border)',
+            background: 'color-mix(in srgb, var(--surface) 72%, transparent)',
+            color: 'var(--foreground)',
+          }}
         />
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={loadVideo}
-          className="rounded-2xl bg-red-500 px-4 py-3 text-sm font-semibold text-white"
+          className="rounded-2xl px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(244,63,94,0.22)]"
+          style={{ background: 'var(--accent)' }}
         >
-          Load
+          Open
         </motion.button>
       </div>
 
       <div className="flex-1 p-4">
         <div className="mx-auto flex h-full max-w-5xl flex-col gap-4">
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-black shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+          <div
+            className="overflow-hidden rounded-3xl border shadow-[0_20px_60px_rgba(0,0,0,0.18)]"
+            style={{
+              borderColor: 'var(--border)',
+              background: 'color-mix(in srgb, var(--surface) 78%, transparent)',
+            }}
+          >
             <div className="aspect-video w-full">
               {videoId ? (
                 <div id="youtube-player-frame" className="h-full w-full" />
               ) : (
-                <div className="flex h-full items-center justify-center bg-[linear-gradient(135deg,rgba(255,0,0,0.18),rgba(255,208,0,0.12))] text-center">
-                  <div>
-                    <p className="text-lg font-semibold">No video loaded yet</p>
-                    <p className="mt-2 text-sm text-zinc-300">Paste a YouTube link above to start a shared watch session.</p>
-                  </div>
+                <div className="flex h-full items-center justify-center text-center" style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, #ffffff 70%, transparent))' }}>
+                  <p className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>No video yet</p>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="grid gap-3 rounded-3xl border border-white/10 bg-black/35 p-4 backdrop-blur-md">
+          <div
+            className="grid gap-3 rounded-3xl border p-4 backdrop-blur-md"
+            style={{
+              borderColor: 'var(--border)',
+              background: 'color-mix(in srgb, var(--surface) 82%, transparent)',
+            }}
+          >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">Status</p>
-                <p className="mt-1 text-sm font-medium text-zinc-200">
-                  {status === 'loading' ? 'Loading video for both of you...' : status === 'synced' ? 'Synced with partner' : isPlaying ? 'Playing together' : 'Ready to play together'}
+                <p className="text-xs uppercase tracking-[0.25em]" style={{ color: 'color-mix(in srgb, var(--foreground) 52%, transparent)' }}>Status</p>
+                <p className="mt-1 text-sm font-medium" style={{ color: 'var(--foreground)' }}>
+                  {status === 'loading' ? 'Loading...' : status === 'synced' ? 'Synced with partner' : isPlaying ? 'Playing together' : 'Ready to play together'}
                 </p>
               </div>
 
@@ -396,7 +414,11 @@ export const VideoRoom: React.FC = () => {
                 <button
                   onClick={togglePlay}
                   disabled={!videoId}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{
+                    background: 'color-mix(in srgb, var(--surface) 92%, white)',
+                    color: 'var(--foreground)',
+                  }}
                 >
                   {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   {isPlaying ? 'Pause' : 'Play'}
@@ -416,7 +438,12 @@ export const VideoRoom: React.FC = () => {
                     });
                   }}
                   disabled={!videoId}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{
+                    borderColor: 'var(--border)',
+                    background: 'color-mix(in srgb, var(--surface) 72%, transparent)',
+                    color: 'var(--foreground)',
+                  }}
                 >
                   <RotateCcw className="h-4 w-4" />
                   Restart
@@ -432,17 +459,17 @@ export const VideoRoom: React.FC = () => {
                 value={currentTime}
                 onChange={handleSeek}
                 disabled={!videoId}
-                className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 disabled:opacity-40"
+                className="h-2 w-full cursor-pointer appearance-none rounded-full disabled:opacity-40"
+                style={{
+                  background: 'color-mix(in srgb, var(--surface) 68%, transparent)',
+                }}
               />
-              <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+              <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em]" style={{ color: 'color-mix(in srgb, var(--foreground) 52%, transparent)' }}>
                 <span>{formatTime(currentTime)}</span>
                 <span>{formatTime(duration)}</span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-300">
-              Share a link like `https://www.youtube.com/watch?v=...` or a short link. When one of you loads or plays it, the other side gets the same video and timing.
-            </div>
           </div>
         </div>
       </div>

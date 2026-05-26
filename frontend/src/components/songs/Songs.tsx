@@ -242,7 +242,10 @@ export const Songs: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full px-8 py-4 relative select-none">
+    <div
+      className="relative flex h-full flex-col items-center justify-center px-8 py-4 select-none"
+      style={{ color: 'var(--foreground)' }}
+    >
       <audio ref={audioRef} />
 
       <AnimatePresence>
@@ -251,7 +254,11 @@ export const Songs: React.FC = () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="absolute top-4 bg-zinc-900/90 text-white dark:bg-zinc-100/90 dark:text-zinc-900 text-[10px] tracking-wider uppercase font-semibold px-3 py-1 rounded-full shadow-md z-20 pointer-events-none"
+            className="pointer-events-none absolute top-4 z-20 rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wider shadow-md"
+            style={{
+              background: 'color-mix(in srgb, var(--surface) 92%, white)',
+              color: 'var(--foreground)',
+            }}
           >
             {syncStatus === 'synced' ? 'Synced with partner' : 'Sending play state'}
           </motion.div>
@@ -259,7 +266,13 @@ export const Songs: React.FC = () => {
       </AnimatePresence>
 
       <div className="w-full max-w-[340px] flex flex-col">
-        <div className="relative aspect-square w-full rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.12)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] mb-8 bg-zinc-50 dark:bg-zinc-950 border border-zinc-100/60 dark:border-zinc-900/40">
+        <div
+          className="relative mb-8 aspect-square w-full overflow-hidden rounded-2xl border shadow-[0_20px_50px_rgba(0,0,0,0.08)]"
+          style={{
+            background: 'color-mix(in srgb, var(--surface) 92%, white)',
+            borderColor: 'var(--border)',
+          }}
+        >
           <img src={activeSong.coverUrl} alt={activeSong.title} className="h-full w-full object-cover pointer-events-none" />
 
           <motion.button
@@ -267,27 +280,32 @@ export const Songs: React.FC = () => {
             whileTap={{ scale: 0.9 }}
             onClick={handleForceSync}
             title="Force synchronization with partner"
-            className="absolute top-4 right-4 h-9 w-9 flex items-center justify-center rounded-full bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md text-zinc-700 dark:text-zinc-300 border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm"
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-md shadow-sm"
+            style={{
+              background: 'color-mix(in srgb, var(--surface) 88%, white)',
+              color: 'var(--foreground)',
+              borderColor: 'var(--border)',
+            }}
           >
             <Share2 className={`h-4 w-4 ${syncStatus === 'broadcasting' ? 'animate-pulse text-rose-500' : ''}`} />
           </motion.button>
         </div>
 
-        <div className="flex justify-between text-[10px] font-extrabold tracking-widest text-zinc-400 dark:text-zinc-600 uppercase mb-4 px-0.5">
+        <div className="mb-4 flex justify-between px-0.5 text-[10px] font-extrabold uppercase tracking-widest" style={{ color: 'color-mix(in srgb, var(--foreground) 48%, transparent)' }}>
           <span>{activeSong.artist.toUpperCase()}</span>
           <span>{activeSong.album}</span>
         </div>
 
-        <h1 className="text-3xl font-bold font-serif text-zinc-900 dark:text-zinc-50 tracking-tight leading-none mb-1">
+        <h1 className="mb-1 text-3xl font-bold leading-none tracking-tight" style={{ color: 'var(--foreground)' }}>
           {activeSong.title}
         </h1>
 
-        <p className="text-sm text-zinc-400 dark:text-zinc-500 font-medium mb-6">
+        <p className="mb-6 text-sm font-medium" style={{ color: 'color-mix(in srgb, var(--foreground) 62%, transparent)' }}>
           {activeSong.artist.toLowerCase()}
         </p>
 
         <div className="flex flex-col gap-2 mb-8">
-          <div className="relative w-full h-1 bg-zinc-100 dark:bg-zinc-900 rounded-full flex items-center group">
+          <div className="group relative flex h-1 w-full items-center rounded-full" style={{ background: 'color-mix(in srgb, var(--surface) 82%, white)' }}>
             <input
               type="range"
               min={0}
@@ -296,14 +314,14 @@ export const Songs: React.FC = () => {
               onChange={handleSeek}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             />
-            <div className="h-full bg-zinc-900 dark:bg-zinc-200 rounded-full" style={{ width: `${(currentTime / (duration || 1)) * 100}%` }} />
+            <div className="h-full rounded-full" style={{ width: `${(currentTime / (duration || 1)) * 100}%`, background: 'var(--accent)' }} />
             <div
-              className="absolute h-2.5 w-2.5 rounded-full bg-zinc-950 dark:bg-zinc-50 shadow-sm transition-transform scale-0 group-hover:scale-100"
+              className="absolute h-2.5 w-2.5 scale-0 rounded-full shadow-sm transition-transform group-hover:scale-100"
               style={{ left: `calc(${(currentTime / (duration || 1)) * 100}% - 5px)` }}
             />
           </div>
 
-          <div className="flex justify-between text-[10px] font-bold text-zinc-400 dark:text-zinc-600 tracking-wider">
+          <div className="flex justify-between text-[10px] font-bold tracking-wider" style={{ color: 'color-mix(in srgb, var(--foreground) 48%, transparent)' }}>
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>

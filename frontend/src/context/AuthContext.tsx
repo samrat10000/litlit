@@ -81,6 +81,26 @@ export interface VideoStateData {
   _ts?: number;
 }
 
+export type ThemeId =
+  | 'midnight'
+  | 'rose'
+  | 'lavender'
+  | 'mint'
+  | 'peach'
+  | 'sand'
+  | 'sakura'
+  | 'matcha'
+  | 'yuzu'
+  | 'wabisabi'
+  | 'indigo'
+  | 'umi';
+
+export interface ThemeStateData {
+  themeId: ThemeId;
+  timestamp?: number;
+  _ts?: number;
+}
+
 interface AuthResponse {
   token: string;
   user: User;
@@ -112,6 +132,7 @@ interface AuthContextType {
   doodleClearSignal: number;
   lastReceivedMusicState: MusicStateData | null;
   lastReceivedVideoState: VideoStateData | null;
+  themeId: ThemeId;
   perfectMatchSignal: number;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName: string) => Promise<void>;
@@ -125,6 +146,7 @@ interface AuthContextType {
   sendDoodleClear: () => void;
   sendMusicState: (data: MusicStateData) => void;
   sendVideoState: (data: VideoStateData) => void;
+  setThemeId: (themeId: ThemeId, broadcast?: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -145,8 +167,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [doodleClearSignal, setDoodleClearSignal] = useState(0);
   const [lastReceivedMusicState, setLastReceivedMusicState] = useState<MusicStateData | null>(null);
   const [lastReceivedVideoState, setLastReceivedVideoState] = useState<VideoStateData | null>(null);
+  const [themeId, setThemeIdState] = useState<ThemeId>('midnight');
   const [perfectMatchSignal, setPerfectMatchSignal] = useState(0);
   const socketRef = useRef<Socket | null>(null);
+  const suppressThemeBroadcastRef = useRef(false);
+  const lastAppliedThemeRef = useRef<ThemeId>('midnight');
 
   const fetchMessages = useCallback(async (tok: string) => {
     try {
@@ -232,6 +257,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLastReceivedVideoState({ ...data, _ts: Date.now() });
     });
 
+    socket.on('receive-theme-state', (data: ThemeStateData) => {
+      if (data.themeId && data.themeId !== lastAppliedThemeRef.current) {
+        suppressThemeBroadcastRef.current = true;
+        setThemeIdState(data.themeId);
+        lastAppliedThemeRef.current = data.themeId;
+      }
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -240,11 +273,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [token, fetchMessages]);
 
   useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const theme = themeId || 'midnight';
+    document.documentElement.dataset.theme = theme;
+    document.body.dataset.theme = theme;
+    localStorage.setItem('litit-theme', theme);
+    lastAppliedThemeRef.current = themeId;
+
+    if (suppressThemeBroadcastRef.current) {
+      suppressThemeBroadcastRef.current = false;
+      return;
+    }
+
+    if (socketRef.current && isConnected) {
+      socketRef.current.emit('theme-state', { themeId });
+    }
+  }, [themeId, isConnected]);
+
+  useEffect(() => {
     const init = async () => {
       const stored = localStorage.getItem('token');
       if (stored) {
         try {
           setToken(stored);
+          const savedTheme = localStorage.getItem('litit-theme') as ThemeId | null;
+          if (savedTheme) {
+            setThemeIdState(savedTheme);
+            lastAppliedThemeRef.current = savedTheme;
+          }
           const userData = await apiRequest('/auth/me', {
             headers: { Authorization: `Bearer ${stored}` },
           }) as UserResponse;
@@ -388,6 +445,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socketRef.current?.emit('video-state', data);
   }, []);
 
+  const setThemeId = useCallback((nextThemeId: ThemeId, broadcast = true) => {
+    lastAppliedThemeRef.current = nextThemeId;
+    suppressThemeBroadcastRef.current = !broadcast;
+    setThemeIdState(nextThemeId);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -402,6 +465,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         doodleClearSignal,
         lastReceivedMusicState,
         lastReceivedVideoState,
+        themeId,
         perfectMatchSignal,
         login,
         register,
@@ -415,6 +479,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendDoodleClear,
         sendMusicState,
         sendVideoState,
+        setThemeId,
       }}
     >
       {children}
