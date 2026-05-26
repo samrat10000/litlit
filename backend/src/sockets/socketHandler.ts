@@ -144,10 +144,6 @@ export const setupSocket = (io: Server) => {
           ...data,
           timestamp: Date.now(),
         });
-        socket.emit('receive-video-state', {
-          ...data,
-          timestamp: Date.now(),
-        });
       } catch {}
     });
 

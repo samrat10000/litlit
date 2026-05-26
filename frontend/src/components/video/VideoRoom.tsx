@@ -11,7 +11,8 @@ type YouTubePlayer = {
   playVideo: () => void;
   pauseVideo: () => void;
   seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
-  loadVideoById: (videoId: string, startSeconds?: number) => void;
+  loadVideoById?: (videoId: string, startSeconds?: number) => void;
+  cueVideoById?: (videoId: string, startSeconds?: number) => void;
   getCurrentTime: () => number;
   getDuration: () => number;
   destroy: () => void;
@@ -78,6 +79,20 @@ const formatTime = (seconds: number) => {
   return `${minutes}:${remainder < 10 ? '0' : ''}${remainder}`;
 };
 
+const loadVideoIntoPlayer = (player: YouTubePlayer, videoId: string, startSeconds: number) => {
+  if (typeof player.loadVideoById === 'function') {
+    player.loadVideoById(videoId, startSeconds);
+    return true;
+  }
+
+  if (typeof player.cueVideoById === 'function') {
+    player.cueVideoById(videoId, startSeconds);
+    return true;
+  }
+
+  return false;
+};
+
 export const VideoRoom: React.FC = () => {
   const { lastReceivedVideoState, sendVideoState } = useAuth();
   const [urlInput, setUrlInput] = useState('');
@@ -90,7 +105,14 @@ export const VideoRoom: React.FC = () => {
   const playerRef = useRef<YouTubePlayer | null>(null);
   const playerReadyRef = useRef(false);
   const isApplyingRemoteRef = useRef(false);
+  const suppressBroadcastUntilRef = useRef(0);
+  const lastRemoteSignatureRef = useRef('');
   const tickRef = useRef<number | null>(null);
+
+  const buildSignature = (state?: { action: string; videoId: string; currentTime: number; isPlaying?: boolean }) => {
+    if (!state) return '';
+    return `${state.action}:${state.videoId}:${Math.round(state.currentTime)}:${state.isPlaying ? 1 : 0}`;
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -135,8 +157,16 @@ export const VideoRoom: React.FC = () => {
 
     const player = playerRef.current;
     const remoteVideoId = lastReceivedVideoState.videoId;
+    const signature = buildSignature(lastReceivedVideoState);
+
+    if (signature === lastRemoteSignatureRef.current) {
+      return;
+    }
+
+    lastRemoteSignatureRef.current = signature;
 
     isApplyingRemoteRef.current = true;
+    suppressBroadcastUntilRef.current = Date.now() + 1500;
 
     if (remoteVideoId && remoteVideoId !== videoId) {
       setVideoId(remoteVideoId);
@@ -146,7 +176,7 @@ export const VideoRoom: React.FC = () => {
       if (!playerReadyRef.current || !player) return;
 
       if (lastReceivedVideoState.action === 'load') {
-        player.loadVideoById(remoteVideoId, lastReceivedVideoState.currentTime || 0);
+        loadVideoIntoPlayer(player, remoteVideoId, lastReceivedVideoState.currentTime || 0);
         setCurrentTime(lastReceivedVideoState.currentTime || 0);
         setIsPlaying(Boolean(lastReceivedVideoState.isPlaying));
       } else if (lastReceivedVideoState.action === 'seek') {
@@ -166,6 +196,7 @@ export const VideoRoom: React.FC = () => {
       window.setTimeout(() => setStatus('idle'), 2000);
       window.setTimeout(() => {
         isApplyingRemoteRef.current = false;
+        suppressBroadcastUntilRef.current = 0;
       }, 100);
     };
 
@@ -197,7 +228,7 @@ export const VideoRoom: React.FC = () => {
             setCurrentTime(target.getCurrentTime() || 0);
           },
           onStateChange: ({ data, target }) => {
-            if (isApplyingRemoteRef.current) return;
+            if (isApplyingRemoteRef.current || Date.now() < suppressBroadcastUntilRef.current) return;
 
             setCurrentTime(target.getCurrentTime() || 0);
             setDuration(target.getDuration() || 0);
@@ -252,7 +283,8 @@ export const VideoRoom: React.FC = () => {
 
     const player = playerRef.current;
     if (player && playerReadyRef.current) {
-      player.loadVideoById(nextVideoId, 0);
+      suppressBroadcastUntilRef.current = Date.now() + 800;
+      loadVideoIntoPlayer(player, nextVideoId, 0);
       setCurrentTime(0);
       setIsPlaying(false);
     }
@@ -271,6 +303,7 @@ export const VideoRoom: React.FC = () => {
 
     if (isPlaying) {
       player.pauseVideo();
+      suppressBroadcastUntilRef.current = Date.now() + 800;
       sendVideoState({
         action: 'pause',
         videoId,
@@ -279,6 +312,7 @@ export const VideoRoom: React.FC = () => {
       });
     } else {
       player.playVideo();
+      suppressBroadcastUntilRef.current = Date.now() + 800;
       sendVideoState({
         action: 'play',
         videoId,
@@ -293,6 +327,7 @@ export const VideoRoom: React.FC = () => {
     if (!player || !videoId) return;
 
     const nextTime = parseFloat(event.target.value);
+    suppressBroadcastUntilRef.current = Date.now() + 800;
     player.seekTo(nextTime, true);
     setCurrentTime(nextTime);
     sendVideoState({
