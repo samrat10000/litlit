@@ -2,18 +2,20 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Pencil, LogOut, Unlink } from 'lucide-react';
+import { Heart, MessageCircle, Pencil, LogOut, Unlink, Music } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { HeartTap } from '../heart/HeartTap';
 import { Chat } from '../chat/Chat';
 import { Doodle } from '../doodle/Doodle';
+import { Songs } from '../songs/Songs';
 
-type Tab = 'heart' | 'chat' | 'doodle';
+type Tab = 'heart' | 'doodle' | 'chat' | 'songs';
 
 const TABS: { id: Tab; icon: React.ReactNode; label: string }[] = [
   { id: 'heart', icon: <Heart className="h-5 w-5" />, label: 'Heart' },
-  { id: 'chat', icon: <MessageCircle className="h-5 w-5" />, label: 'Chat' },
   { id: 'doodle', icon: <Pencil className="h-5 w-5" />, label: 'Doodle' },
+  { id: 'chat', icon: <MessageCircle className="h-5 w-5" />, label: 'Chat' },
+  { id: 'songs', icon: <Music className="h-5 w-5" />, label: 'Songs' },
 ];
 
 export const AppShell: React.FC = () => {
@@ -80,6 +82,7 @@ export const AppShell: React.FC = () => {
     heart: <HeartTap />,
     chat: <Chat />,
     doodle: <Doodle />,
+    songs: <Songs />,
   };
 
   return (

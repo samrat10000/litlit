@@ -39,6 +39,13 @@ interface DoodleStrokeData {
   size: number;
 }
 
+export interface MusicStateData {
+  action: 'play' | 'pause' | 'seek' | 'change';
+  songIndex: number;
+  currentTime: number;
+  _ts?: number;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -49,6 +56,7 @@ interface AuthContextType {
   messages: ChatMessage[];
   lastDoodleStroke: DoodleStrokeData | null;
   doodleClearSignal: number;
+  lastReceivedMusicState: MusicStateData | null;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName: string) => Promise<void>;
   connectPartner: (partnerCode: string) => Promise<void>;
@@ -59,6 +67,7 @@ interface AuthContextType {
   sendMessage: (content: string) => boolean;
   sendDoodleStroke: (data: DoodleStrokeData) => void;
   sendDoodleClear: () => void;
+  sendMusicState: (data: MusicStateData) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -73,6 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [lastDoodleStroke, setLastDoodleStroke] = useState<DoodleStrokeData | null>(null);
   const [doodleClearSignal, setDoodleClearSignal] = useState(0);
+  const [lastReceivedMusicState, setLastReceivedMusicState] = useState<MusicStateData | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   // Fetch message history when user has a partner
@@ -106,7 +116,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     socket.on('partner-connected', (data: any) => {
       setUser(prev => prev ? { ...prev, partnerId: data.partnerId } : null);
-      // Fetch messages once connected
       if (token) fetchMessages(token);
     });
 
@@ -132,6 +141,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     socket.on('receive-doodle-clear', () => {
       setDoodleClearSignal(s => s + 1);
+    });
+
+    socket.on('receive-music-state', (data: MusicStateData) => {
+      setLastReceivedMusicState({ ...data, _ts: Date.now() });
     });
 
     return () => { socket.disconnect(); socketRef.current = null; setIsConnected(false); };
@@ -228,12 +241,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socketRef.current?.emit('doodle-clear');
   }, []);
 
+  const sendMusicState = useCallback((data: MusicStateData) => {
+    socketRef.current?.emit('music-state', data);
+  }, []);
+
   return (
     <AuthContext.Provider value={{
       user, token, loading, error, isConnected,
       lastReceivedTap, messages, lastDoodleStroke, doodleClearSignal,
+      lastReceivedMusicState,
       login, register, connectPartner, disconnectPartner, logout, clearError,
-      sendHeartTap, sendMessage, sendDoodleStroke, sendDoodleClear,
+      sendHeartTap, sendMessage, sendDoodleStroke, sendDoodleClear, sendMusicState,
     }}>
       {children}
     </AuthContext.Provider>

@@ -93,6 +93,14 @@ export const setupSocket = (io: Server) => {
       } catch {}
     });
 
+    socket.on('music-state', async (data) => {
+      try {
+        const sender = await User.findById(userId);
+        if (!sender || !sender.partnerId) return;
+        io.to(sender.partnerId.toString()).emit('receive-music-state', data);
+      } catch {}
+    });
+
     socket.on('disconnect', () => {
       console.log(`User disconnected: ${userId}`);
     });
