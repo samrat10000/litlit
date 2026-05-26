@@ -13,10 +13,10 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
 
     const messages = await Message.find({
       $or: [
-        { sender: req.userId, recipient: user.partnerId },
-        { sender: user.partnerId, recipient: req.userId },
+        { sender: req.userId, recipient: user.partnerId.toString() },
+        { sender: user.partnerId.toString(), recipient: req.userId },
       ],
-    })
+    } as never)
       .sort({ createdAt: 1 })
       .limit(100)
       .populate('sender', 'displayName');

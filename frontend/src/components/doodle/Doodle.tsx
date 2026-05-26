@@ -3,64 +3,115 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { motion } from 'framer-motion';
-import { Trash2, Pencil, Minus, Circle } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
-const COLORS = ['#f43f5e', '#8b5cf6', '#06b6d4', '#22c55e', '#f97316', '#1e1e1e', '#ffffff'];
-const SIZES = [2, 5, 10, 18];
+const COLORS = [
+  '#ff007f',
+  '#00f3ff',
+  '#39ff14',
+  '#b026ff',
+  '#ffe600',
+  '#ff6700',
+  '#ffffff',
+];
+const SIZES = [3, 6, 12, 22];
+
+interface DoodleStroke {
+  type: 'begin' | 'move' | 'end';
+  x: number;
+  y: number;
+  color: string;
+  size: number;
+}
 
 export const Doodle: React.FC = () => {
   const { sendDoodleStroke, sendDoodleClear, lastDoodleStroke, doodleClearSignal } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
-  const [color, setColor] = useState('#f43f5e');
-  const [size, setSize] = useState(5);
+  const localFrameRef = useRef<number | null>(null);
+
+  const [color, setColor] = useState('#ff007f');
+  const [size, setSize] = useState(6);
 
   const getCtx = () => canvasRef.current?.getContext('2d') ?? null;
 
-  // Resize canvas to fill container
+  const applyNeonSettings = (ctx: CanvasRenderingContext2D, strokeColor: string, brushSize: number) => {
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowBlur = brushSize * 1.5 + 4;
+    ctx.shadowColor = strokeColor;
+  };
+
+  const stampPoint = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, strokeColor: string, brushSize: number) => {
+    applyNeonSettings(ctx, strokeColor, brushSize);
+    ctx.beginPath();
+    ctx.fillStyle = strokeColor;
+    ctx.arc(x, y, Math.max(brushSize * 0.55, 2), 0, Math.PI * 2);
+    ctx.fill();
+  }, []);
+
   useEffect(() => {
     const resize = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
+
       const { width, height } = canvas.getBoundingClientRect();
-      // Preserve drawing
-      const imageData = getCtx()?.getImageData(0, 0, canvas.width, canvas.height);
+      const ctx = getCtx();
+      let tempImageData: ImageData | null = null;
+
+      if (ctx && canvas.width > 0 && canvas.height > 0) {
+        tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      }
+
       canvas.width = width;
       canvas.height = height;
-      if (imageData) getCtx()?.putImageData(imageData, 0, 0);
+
+      if (ctx && tempImageData) {
+        ctx.putImageData(tempImageData, 0, 0);
+      }
     };
+
     resize();
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, []);
 
-  // Draw partner strokes received via socket
   useEffect(() => {
     if (!lastDoodleStroke) return;
+
     const ctx = getCtx();
     if (!ctx) return;
-    const s = lastDoodleStroke as any;
-    ctx.strokeStyle = s.color;
-    ctx.lineWidth = s.size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    if (s.type === 'begin') {
-      ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-    } else if (s.type === 'move') {
-      ctx.lineTo(s.x, s.y);
-      ctx.stroke();
-    }
-  }, [lastDoodleStroke]);
 
-  // Clear on partner clear signal
+    const stroke: DoodleStroke = lastDoodleStroke;
+    if (stroke.type === 'begin') {
+      stampPoint(ctx, stroke.x, stroke.y, stroke.color, stroke.size);
+      ctx.beginPath();
+      ctx.moveTo(stroke.x, stroke.y);
+    } else if (stroke.type === 'move') {
+      applyNeonSettings(ctx, stroke.color, stroke.size);
+      ctx.lineTo(stroke.x, stroke.y);
+      ctx.stroke();
+    } else if (stroke.type === 'end') {
+      ctx.closePath();
+    }
+  }, [lastDoodleStroke, stampPoint]);
+
   useEffect(() => {
     if (doodleClearSignal === 0) return;
     const canvas = canvasRef.current;
     const ctx = getCtx();
     if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
   }, [doodleClearSignal]);
+
+  useEffect(() => {
+    return () => {
+      if (localFrameRef.current) {
+        cancelAnimationFrame(localFrameRef.current);
+      }
+    };
+  }, []);
 
   const getPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -71,32 +122,40 @@ export const Doodle: React.FC = () => {
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
     isDrawing.current = true;
     const pos = getPos(e);
-    lastPos.current = pos;
     const ctx = getCtx();
     if (!ctx) return;
+
+    stampPoint(ctx, pos.x, pos.y, color, size);
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
     sendDoodleStroke({ type: 'begin', x: pos.x, y: pos.y, color, size });
-  }, [color, size, sendDoodleStroke]);
+  }, [color, size, sendDoodleStroke, stampPoint]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing.current) return;
     const pos = getPos(e);
-    const ctx = getCtx();
-    if (!ctx) return;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    lastPos.current = pos;
-    sendDoodleStroke({ type: 'move', x: pos.x, y: pos.y, color, size });
+
+    if (localFrameRef.current) {
+      cancelAnimationFrame(localFrameRef.current);
+    }
+
+    localFrameRef.current = requestAnimationFrame(() => {
+      const ctx = getCtx();
+      if (!ctx) return;
+
+      applyNeonSettings(ctx, color, size);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      sendDoodleStroke({ type: 'move', x: pos.x, y: pos.y, color, size });
+      localFrameRef.current = null;
+    });
   }, [color, size, sendDoodleStroke]);
 
   const onPointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     isDrawing.current = false;
-    lastPos.current = null;
+    if ((e.target as HTMLCanvasElement).hasPointerCapture(e.pointerId)) {
+      (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+    }
     sendDoodleStroke({ type: 'end', x: 0, y: 0, color, size });
   }, [color, size, sendDoodleStroke]);
 
@@ -108,49 +167,62 @@ export const Doodle: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-100 dark:border-zinc-900 flex-wrap">
-        {/* Color swatches */}
-        <div className="flex items-center gap-1.5">
+    <div className="flex flex-col h-full bg-[radial-gradient(circle_at_top,_rgba(0,243,255,0.18),_transparent_35%),radial-gradient(circle_at_bottom,_rgba(255,0,127,0.18),_transparent_40%),#050510] text-white select-none">
+      <div className="flex items-center gap-4 px-4 py-3 border-b border-cyan-400/10 bg-black/40 backdrop-blur-md flex-wrap z-10 shadow-[0_10px_40px_rgba(0,0,0,0.35)]">
+        <div className="flex items-center gap-2">
           {COLORS.map(c => (
             <button
               key={c}
               onClick={() => setColor(c)}
-              className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c ? 'border-zinc-500 scale-110' : 'border-transparent'}`}
-              style={{ background: c === '#ffffff' ? '#e5e7eb' : c }}
+              className={`h-6 w-6 rounded-full border-2 transition-all hover:scale-125 ${
+                color === c ? 'border-white scale-125 shadow-[0_0_16px_rgba(255,255,255,0.9)]' : 'border-transparent'
+              }`}
+              style={{
+                background: c,
+                boxShadow: `0 0 12px ${c}aa`,
+              }}
             />
           ))}
         </div>
 
-        {/* Size selector */}
-        <div className="flex items-center gap-1.5 border-l border-zinc-200 dark:border-zinc-800 pl-3">
+        <div className="flex items-center gap-2 border-l border-white/10 pl-4">
           {SIZES.map(s => (
             <button
               key={s}
               onClick={() => setSize(s)}
-              className={`flex items-center justify-center rounded-full transition-all hover:bg-zinc-100 dark:hover:bg-zinc-900 h-7 w-7 ${size === s ? 'bg-zinc-100 dark:bg-zinc-900' : ''}`}
+              className={`flex items-center justify-center rounded-full transition-all hover:bg-white/8 h-8 w-8 ${
+                size === s ? 'bg-white/10 border border-white/20 shadow-[0_0_18px_rgba(0,243,255,0.2)]' : ''
+              }`}
             >
               <div
-                className="rounded-full bg-zinc-700 dark:bg-zinc-300"
-                style={{ width: Math.min(s * 1.4, 18), height: Math.min(s * 1.4, 18) }}
+                className="rounded-full bg-zinc-100"
+                style={{
+                  width: Math.min(s * 0.9 + 2, 18),
+                  height: Math.min(s * 0.9 + 2, 18),
+                  boxShadow: size === s ? '0 0 8px #ffffff' : 'none',
+                }}
               />
             </button>
           ))}
         </div>
 
-        {/* Clear */}
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={handleClear}
-          className="ml-auto flex items-center gap-1.5 text-xs text-zinc-400 hover:text-rose-500 dark:text-zinc-600 dark:hover:text-rose-400 transition-colors px-2 py-1 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950/20"
+          className="ml-auto flex items-center gap-1.5 text-xs text-zinc-400 hover:text-rose-300 transition-colors px-3 py-1.5 rounded-xl hover:bg-rose-500/10"
         >
-          <Trash2 className="h-3.5 w-3.5" /> Clear both
+          <Trash2 className="h-4 w-4" /> Clear both
         </motion.button>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden bg-[linear-gradient(180deg,rgba(8,10,25,0.92),rgba(2,3,10,1))]">
+        <div
+          className="absolute inset-0 pointer-events-none opacity-40"
+          style={{
+            backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
+            backgroundSize: '28px 28px',
+          }}
+        />
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
@@ -160,8 +232,8 @@ export const Doodle: React.FC = () => {
           onPointerUp={onPointerUp}
           onPointerLeave={onPointerUp}
         />
-        <p className="absolute bottom-3 right-4 text-[10px] text-zinc-300 dark:text-zinc-700 select-none pointer-events-none">
-          Both of you draw here ✏️
+        <p className="absolute bottom-4 right-4 text-[10px] text-cyan-200/45 select-none pointer-events-none tracking-[0.28em] font-semibold uppercase drop-shadow-[0_0_8px_rgba(0,243,255,0.5)]">
+          Neon Doodling Game
         </p>
       </div>
     </div>

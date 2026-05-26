@@ -1,21 +1,45 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, startTransition } from 'react';
 import { apiRequest } from '../services/api';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5001';
+const getSocketUrl = () => {
+  const envUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+  if (envUrl) {
+    return envUrl.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+
+    if (!hostname.includes('localhost') && !hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+      if (hostname.includes('onrender.com')) {
+        return `https://${hostname.replace('litit-frontend', 'litit-backend')}`;
+      }
+      return `${window.location.protocol}//${hostname}`;
+    }
+
+    return `${window.location.protocol}//${hostname}:5000`;
+  }
+
+  return 'http://localhost:5000';
+};
+
+const SOCKET_URL = getSocketUrl();
+
+interface PartnerSummary {
+  _id: string;
+  username: string;
+  displayName: string;
+}
 
 interface User {
   id: string;
   username: string;
   displayName: string;
   partnerCode: string;
-  partnerId: {
-    _id: string;
-    username: string;
-    displayName: string;
-  } | null;
+  partnerId: PartnerSummary | null;
 }
 
 export interface ChatMessage {
@@ -25,10 +49,12 @@ export interface ChatMessage {
   createdAt: string;
 }
 
-interface HeartTapData {
+export interface HeartTapData {
+  senderId: string;
   senderName: string;
   intensity: string;
   timestamp: number;
+  count: number;
 }
 
 interface DoodleStrokeData {
@@ -43,7 +69,27 @@ export interface MusicStateData {
   action: 'play' | 'pause' | 'seek' | 'change';
   songIndex: number;
   currentTime: number;
+  isPlaying?: boolean;
   _ts?: number;
+}
+
+interface AuthResponse {
+  token: string;
+  user: User;
+}
+
+type UserResponse = User;
+
+interface PartnerConnectedEvent {
+  partnerId: PartnerSummary;
+}
+
+interface HeartTapEvent {
+  senderId: string;
+  senderName: string;
+  intensity?: string;
+  timestamp?: string | number | Date;
+  count?: number;
 }
 
 interface AuthContextType {
@@ -57,13 +103,14 @@ interface AuthContextType {
   lastDoodleStroke: DoodleStrokeData | null;
   doodleClearSignal: number;
   lastReceivedMusicState: MusicStateData | null;
+  perfectMatchSignal: number;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName: string) => Promise<void>;
   connectPartner: (partnerCode: string) => Promise<void>;
   disconnectPartner: () => Promise<void>;
   logout: () => void;
   clearError: () => void;
-  sendHeartTap: (intensity?: 'normal' | 'soft' | 'strong') => boolean;
+  sendHeartTap: (intensity?: 'normal' | 'soft' | 'strong', count?: number) => boolean;
   sendMessage: (content: string) => boolean;
   sendDoodleStroke: (data: DoodleStrokeData) => void;
   sendDoodleClear: () => void;
@@ -71,6 +118,10 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  return error instanceof Error ? error.message : fallback;
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -83,22 +134,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastDoodleStroke, setLastDoodleStroke] = useState<DoodleStrokeData | null>(null);
   const [doodleClearSignal, setDoodleClearSignal] = useState(0);
   const [lastReceivedMusicState, setLastReceivedMusicState] = useState<MusicStateData | null>(null);
+  const [perfectMatchSignal, setPerfectMatchSignal] = useState(0);
   const socketRef = useRef<Socket | null>(null);
 
-  // Fetch message history when user has a partner
   const fetchMessages = useCallback(async (tok: string) => {
     try {
       const data = await apiRequest('/messages', { headers: { Authorization: `Bearer ${tok}` } });
-      setMessages(Array.isArray(data) ? data : []);
-    } catch { setMessages([]); }
+      setMessages(Array.isArray(data) ? data as ChatMessage[] : []);
+    } catch {
+      setMessages([]);
+    }
   }, []);
 
-  // Socket lifecycle
   useEffect(() => {
     if (!token) {
       socketRef.current?.disconnect();
       socketRef.current = null;
-      setIsConnected(false);
+      startTransition(() => setIsConnected(false));
       return;
     }
 
@@ -110,116 +162,188 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     socketRef.current = socket;
 
-    socket.on('connect', () => setIsConnected(true));
-    socket.on('disconnect', () => setIsConnected(false));
-    socket.on('connect_error', () => setIsConnected(false));
+    socket.on('connect', () => {
+      startTransition(() => setIsConnected(true));
+      fetchMessages(token).catch(() => undefined);
+    });
 
-    socket.on('partner-connected', (data: any) => {
-      setUser(prev => prev ? { ...prev, partnerId: data.partnerId } : null);
-      if (token) fetchMessages(token);
+    socket.on('disconnect', () => {
+      startTransition(() => setIsConnected(false));
+    });
+
+    socket.on('connect_error', () => {
+      startTransition(() => setIsConnected(false));
+    });
+
+    socket.on('partner-connected', (data: PartnerConnectedEvent) => {
+      setUser(prev => (prev ? { ...prev, partnerId: data.partnerId } : null));
+      fetchMessages(token).catch(() => undefined);
     });
 
     socket.on('partner-disconnected', () => {
-      setUser(prev => prev ? { ...prev, partnerId: null } : null);
+      setUser(prev => (prev ? { ...prev, partnerId: null } : null));
       setMessages([]);
     });
 
-    socket.on('receive-heart', (data: any) => {
-      setLastReceivedTap({ senderName: data.senderName, intensity: data.intensity || 'normal', timestamp: Date.now() });
-    });
-
-    socket.on('receive-message', (data: ChatMessage) => {
-      setMessages(prev => {
-        if (prev.some(m => m._id === data._id)) return prev;
-        return [...prev, data];
+    socket.on('receive-heart', (data: HeartTapEvent) => {
+      setLastReceivedTap({
+        senderId: data.senderId,
+        senderName: data.senderName,
+        intensity: data.intensity || 'normal',
+        timestamp: data.timestamp ? new Date(data.timestamp).getTime() : Date.now(),
+        count: data.count || 1,
       });
     });
 
+    socket.on('perfect-match', () => {
+      setPerfectMatchSignal(signal => signal + 1);
+    });
+
+    socket.on('receive-message', (data: ChatMessage) => {
+      setMessages(prev => (
+        prev.some(message => message._id === data._id) ? prev : [...prev, data]
+      ));
+    });
+
     socket.on('receive-doodle-stroke', (data: DoodleStrokeData) => {
-      setLastDoodleStroke({ ...data, _ts: Date.now() } as any);
+      setLastDoodleStroke(data);
     });
 
     socket.on('receive-doodle-clear', () => {
-      setDoodleClearSignal(s => s + 1);
+      setDoodleClearSignal(signal => signal + 1);
     });
 
     socket.on('receive-music-state', (data: MusicStateData) => {
       setLastReceivedMusicState({ ...data, _ts: Date.now() });
     });
 
-    return () => { socket.disconnect(); socketRef.current = null; setIsConnected(false); };
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+      startTransition(() => setIsConnected(false));
+    };
   }, [token, fetchMessages]);
 
-  // Init auth
   useEffect(() => {
     const init = async () => {
       const stored = localStorage.getItem('token');
       if (stored) {
         try {
           setToken(stored);
-          const userData = await apiRequest('/auth/me', { headers: { Authorization: `Bearer ${stored}` } });
+          const userData = await apiRequest('/auth/me', {
+            headers: { Authorization: `Bearer ${stored}` },
+          }) as UserResponse;
           setUser(userData);
-          if (userData?.partnerId) fetchMessages(stored);
+          if (userData.partnerId) {
+            fetchMessages(stored).catch(() => undefined);
+          }
         } catch {
           localStorage.removeItem('token');
-          setToken(null); setUser(null);
+          setToken(null);
+          setUser(null);
         }
       }
       setLoading(false);
     };
-    init();
+
+    init().catch(() => {
+      setLoading(false);
+    });
   }, [fetchMessages]);
 
   const login = async (username: string, password: string) => {
-    setError(null); setLoading(true);
+    setError(null);
+    setLoading(true);
     try {
-      const data = await apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      const data = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      }) as AuthResponse;
       localStorage.setItem('token', data.token);
-      setToken(data.token); setUser(data.user);
-      if (data.user?.partnerId) fetchMessages(data.token);
-    } catch (err: any) { setError(err.message || 'Login failed'); throw err; }
-    finally { setLoading(false); }
+      setToken(data.token);
+      setUser(data.user);
+      if (data.user.partnerId) {
+        fetchMessages(data.token).catch(() => undefined);
+      }
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'Login failed');
+      setError(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const register = async (username: string, password: string, displayName: string) => {
-    setError(null); setLoading(true);
+    setError(null);
+    setLoading(true);
     try {
-      const data = await apiRequest('/auth/register', { method: 'POST', body: JSON.stringify({ username, password, displayName }) });
+      const data = await apiRequest('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, password, displayName }),
+      }) as AuthResponse;
       localStorage.setItem('token', data.token);
-      setToken(data.token); setUser(data.user);
-    } catch (err: any) { setError(err.message || 'Registration failed'); throw err; }
-    finally { setLoading(false); }
+      setToken(data.token);
+      setUser(data.user);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'Registration failed');
+      setError(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const connectPartner = async (partnerCode: string) => {
-    setError(null); setLoading(true);
+    setError(null);
+    setLoading(true);
     try {
-      const data = await apiRequest('/auth/connect', { method: 'POST', body: JSON.stringify({ partnerCode }) });
+      const data = await apiRequest('/auth/connect', {
+        method: 'POST',
+        body: JSON.stringify({ partnerCode }),
+      }) as { user: User };
       setUser(data.user);
-      if (token) fetchMessages(token);
-    } catch (err: any) { setError(err.message || 'Connection failed'); throw err; }
-    finally { setLoading(false); }
+      if (token) {
+        fetchMessages(token).catch(() => undefined);
+      }
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'Connection failed');
+      setError(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const disconnectPartner = async () => {
-    setError(null); setLoading(true);
+    setError(null);
+    setLoading(true);
     try {
-      const data = await apiRequest('/auth/disconnect', { method: 'POST' });
-      setUser(data.user); setMessages([]);
-    } catch (err: any) { setError(err.message || 'Disconnection failed'); throw err; }
-    finally { setLoading(false); }
+      const data = await apiRequest('/auth/disconnect', { method: 'POST' }) as { user: User };
+      setUser(data.user);
+      setMessages([]);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'Disconnection failed');
+      setError(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const logout = () => {
     localStorage.removeItem('token');
-    setToken(null); setUser(null); setError(null); setMessages([]);
+    setToken(null);
+    setUser(null);
+    setError(null);
+    setMessages([]);
   };
 
   const clearError = () => setError(null);
 
-  const sendHeartTap = useCallback((intensity: 'normal' | 'soft' | 'strong' = 'normal') => {
+  const sendHeartTap = useCallback((intensity: 'normal' | 'soft' | 'strong' = 'normal', count = 1) => {
     if (socketRef.current && isConnected) {
-      socketRef.current.emit('heart-tap', { intensity });
+      socketRef.current.emit('heart-tap', { intensity, count });
       return true;
     }
     return false;
@@ -246,13 +370,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{
-      user, token, loading, error, isConnected,
-      lastReceivedTap, messages, lastDoodleStroke, doodleClearSignal,
-      lastReceivedMusicState,
-      login, register, connectPartner, disconnectPartner, logout, clearError,
-      sendHeartTap, sendMessage, sendDoodleStroke, sendDoodleClear, sendMusicState,
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        error,
+        isConnected,
+        lastReceivedTap,
+        messages,
+        lastDoodleStroke,
+        doodleClearSignal,
+        lastReceivedMusicState,
+        perfectMatchSignal,
+        login,
+        register,
+        connectPartner,
+        disconnectPartner,
+        logout,
+        clearError,
+        sendHeartTap,
+        sendMessage,
+        sendDoodleStroke,
+        sendDoodleClear,
+        sendMusicState,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

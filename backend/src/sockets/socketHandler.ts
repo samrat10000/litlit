@@ -3,6 +3,13 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
 import { Message } from '../models/Message';
 
+const HEART_MATCH_WINDOW_MS = 1200;
+const recentHeartTaps = new Map<string, { userId: string; timestamp: number; count: number }>();
+
+const getPairKey = (userId: string, partnerId: string) => {
+  return [userId, partnerId].sort().join(':');
+};
+
 export const setupSocket = (io: Server) => {
   io.use((socket: Socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
@@ -30,11 +37,31 @@ export const setupSocket = (io: Server) => {
           return;
         }
         const partnerIdStr = sender.partnerId.toString();
+        const pairKey = getPairKey(userId, partnerIdStr);
+        const timestamp = Date.now();
+        const previousTap = recentHeartTaps.get(pairKey);
+
+        recentHeartTaps.set(pairKey, {
+          userId,
+          timestamp,
+          count: data?.count || 1,
+        });
+
+        if (
+          previousTap &&
+          previousTap.userId !== userId &&
+          timestamp - previousTap.timestamp <= HEART_MATCH_WINDOW_MS
+        ) {
+          io.to(userId).emit('perfect-match', { timestamp });
+          io.to(partnerIdStr).emit('perfect-match', { timestamp });
+        }
+
         io.to(partnerIdStr).emit('receive-heart', {
           senderId: userId,
           senderName: sender.displayName,
-          timestamp: new Date(),
+          timestamp: new Date(timestamp),
           intensity: data?.intensity || 'normal',
+          count: data?.count || 1,
         });
         socket.emit('heart-tap-sent', { success: true });
       } catch (error) {
@@ -51,14 +78,19 @@ export const setupSocket = (io: Server) => {
           return;
         }
         if (!data?.content?.trim()) return;
-
         const msg = await Message.create({
           sender: userId,
-          recipient: sender.partnerId,
+          recipient: sender.partnerId.toString(),
           content: data.content.trim(),
-        });
+        } as never);
 
-        const populated = await msg.populate('sender', 'displayName');
+        const populated = await Message.findById(msg._id)
+          .populate('sender', 'displayName')
+          .lean<{ _id: string; content: string; sender: { _id: string; displayName: string }; createdAt: Date }>();
+        if (!populated) {
+          socket.emit('error-msg', { message: 'Failed to send message' });
+          return;
+        }
 
         const payload = {
           _id: populated._id,
@@ -97,7 +129,10 @@ export const setupSocket = (io: Server) => {
       try {
         const sender = await User.findById(userId);
         if (!sender || !sender.partnerId) return;
-        io.to(sender.partnerId.toString()).emit('receive-music-state', data);
+        io.to(sender.partnerId.toString()).emit('receive-music-state', {
+          ...data,
+          timestamp: Date.now(),
+        });
       } catch {}
     });
 
