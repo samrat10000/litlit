@@ -1,0 +1,30 @@
+services:
+  # 🖥️ Express Node.js Backend Service
+  - type: web
+    name: litit-backend
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        value: mongodb+srv://samrat:1234567890@nahidwin.qptraud.mongodb.net/litit?appName=Go_crazzy
+      - key: JWT_SECRET
+        generateValue: true
+
+  # 🌐 Next.js Frontend Web Service
+  - type: web
+    name: litit-frontend
+    env: node
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://litit-backend.onrender.com/api
+      - key: NEXT_PUBLIC_SOCKET_URL
+        value: https://litit-backend.onrender.com
